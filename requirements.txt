@@ -1,0 +1,6 @@
+streamlit
+flask
+pillow
+opencv-python
+pytesseract
+tensorflow
