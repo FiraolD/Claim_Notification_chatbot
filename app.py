@@ -6,12 +6,15 @@ from utils import extract_text_from_image, predict_damage_type
 
 st.set_page_config(page_title="🚗 Auto Claim Bot", layout="centered")
 
-st.title("🚗 Auto Claim Assistant")
-st.write("Hi! I'm your Auto Claim Bot. Let's get started.")
+st.title("🚗 Auto Claim Notification Assistant")
+st.write("Hi! I'm your Auto Claim Notification Bot. Let's get started.")
 
 # Inputs
 name = st.text_input("Enter your name:")
 policy_number = st.text_input("Enter your policy number:")
+Policy_Type = st.text_input("Enter your policy type:")
+Plate_number = st.number_input("Enter your plate number:")
+Location_of_Accident = st.text_input("Enter specific location where the accident happened:")
 
 # Upload image
 uploaded_file = st.file_uploader("Upload a photo of the damage:", type=["jpg", "png"])
