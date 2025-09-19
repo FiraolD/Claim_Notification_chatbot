@@ -48,7 +48,7 @@ def submit_claim():
             "policy_number": policy,
             "images_received": saved_files,
             "total_images": len(saved_files),
-            "status": "approved"
+            "status": "Delivered"
         }), 200
 
     except Exception as e:
