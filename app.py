@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 from PIL import Image
 import os
-from utils import extract_text_from_image, predict_damage_type
+from utils import predict_damage_type
 
 st.set_page_config(page_title="🚗 Auto Claim Bot", layout="centered")
 

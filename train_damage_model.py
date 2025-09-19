@@ -63,4 +63,6 @@ history = model.fit(
     validation_data=val_gen
 )
 model.save("car_damage_classifier.h5")
+#model.save("car_damage_classifier.keras")
+
 print("Model saved as car_damage_classifier.h5")
