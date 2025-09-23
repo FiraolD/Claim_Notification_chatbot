@@ -12,6 +12,7 @@ import os
 from datetime import datetime
 import shutil
 import sqlite3
+from fpdf import FPDF
 
 
 #Load your trained model
@@ -164,3 +165,64 @@ def save_claim_with_image(name, policy_number, plate_number, location, branch, u
     conn.close()
 
     return claim_ref
+
+def generate_claim_pdf(claim_data, logo_path=None):
+    """
+    Generate a PDF receipt for the submitted claim
+    claim_data: dict containing all claim info
+    logo_path: path to company logo
+    """
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+
+    # Title
+    pdf.set_font("Arial", "B", 16)
+    pdf.set_text_color(0, 51, 153)  # Awash blue
+    pdf.cell(0, 10, "Awash Insurance - Claim Receipt", ln=True, align="C")
+    pdf.ln(5)
+
+    # Logo
+    if logo_path and os.path.exists(logo_path):
+        pdf.image(logo_path, x=10, y=10, w=33)
+
+    # Motto
+    pdf.set_font("Arial", "I", 10)
+    pdf.set_text_color(255, 215, 0)  # Gold
+    pdf.cell(0, 10, '"Your Safety, Our Commitment"', ln=True, align="C")
+    pdf.ln(10)
+
+    # Claim Info
+    pdf.set_font("Arial", "B", 12)
+    pdf.set_text_color(0, 0, 0)
+    fields = [
+        ("Claim Reference", claim_data.get("claim_ref")),
+        ("Full Name", claim_data.get("name")),
+        ("Policy Number", claim_data.get("policy_number")),
+        ("Plate Number", claim_data.get("plate_number")),
+        ("Car Model", claim_data.get("car_model")),
+        ("Branch", claim_data.get("branch")),
+        ("Date of Accident", claim_data.get("date_of_accident")),
+        ("Location", claim_data.get("location")),
+        ("Type of Accident", claim_data.get("type_of_accident")),
+        ("Submitted On", datetime.now().strftime("%Y-%m-%d %H:%M"))
+    ]
+
+    pdf.set_fill_color(240, 240, 240)
+    for label, value in fields:
+        pdf.cell(0, 10, f"{label}:", 0, 1, "L")
+        pdf.set_font("Arial", "", 12)
+        pdf.multi_cell(0, 10, str(value), 0, "L", fill=False)
+        pdf.set_font("Arial", "B", 12)
+
+    # Footer
+    pdf.ln(10)
+    pdf.set_font("Arial", "I", 10)
+    pdf.set_text_color(100, 100, 100)
+    pdf.cell(0, 10, "Thank you for choosing Awash Insurance.", align="C")
+
+    # Save PDF
+    pdf_output = f"claims_pdfs/{claim_data['claim_ref']}.pdf"
+    os.makedirs("claims_pdfs", exist_ok=True)
+    pdf.output(pdf_output)
+    return pdf_output
