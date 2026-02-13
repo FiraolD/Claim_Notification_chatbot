@@ -112,89 +112,178 @@ def generate_claim_reference(branch_name):
 
     return claim_ref
 
-def save_claim_with_image(name, policy_number, plate_number, location, branch, uploaded_image, date_of_accident):
-    """
-    Saves claim data and image in structured folder + updates SQLite
-    Returns claim_ref
-    """
-    # Generate claim reference
-    claim_ref = generate_claim_reference(branch)
-
-    # Create claim-specific folder
-    safe_ref = claim_ref.replace("/", "_")  # For file system
-    claim_folder = os.path.join("submissions", safe_ref)
-    os.makedirs(claim_folder, exist_ok=True)
-
-    # Save image
-    image_filename = f"damage_{safe_ref}.jpg"
-    image_path = os.path.join(claim_folder, image_filename)  # ← Fixed!
-    
-    with open(image_path, "wb") as f:
-        shutil.copyfileobj(uploaded_image, f)  # Handle Streamlit UploadedFile
-
-    # Save metadata JSON (optional)
-    metadata = {
-        "claim_ref": claim_ref,
-        "name": name,
-        "policy_number": policy_number,
-        "plate_number": plate_number,
-        "location": location,
-        "branch": branch,
-        "image_path": image_path,
-        "date_of_accident": date_of_accident
-    }
-
-    with open(os.path.join(claim_folder, "data.json"), "w") as f:
-        import json
-        json.dump(metadata, f, indent=4)
-
-    # Save to SQLite
-    conn = sqlite3.connect("claims.db")
-    cursor = conn.cursor()
-    cursor.execute("""
-    INSERT INTO claims (
-        name, claim_ref, branch, policy_number,
-        plate_number, location, image_path, date_of_accident
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-""", [
-    name, claim_ref, branch, policy_number,
+def save_claim_with_image(
+    claim_ref,
+    name,
+    branch,
+    phone_number,
+    policy_number,
     plate_number,
-    location, image_path, date_of_accident
-])
-    conn.commit()
-    conn.close()
+    car_model,
+    year_of_manufacture,
+    date_of_accident,
+    time_of_accident,
+    type_of_accident,
+    fatality,
+    fatality_details,
+    injuries,
+    location,
+    legal_authority_contacted,
+    police_report_number,
+    witnesses,
+    description_of_accident,
+    uploaded_images,
+    ai_response
+):
+    """
+    Saves claim data + all uploaded images separately
+    into structured folders and records metadata in SQLite.
+    """
+    try:
+        # --- Create base claim folder
+        safe_ref = claim_ref.replace("/", "_")
+        claim_folder = os.path.join("submissions", safe_ref)
+        os.makedirs(claim_folder, exist_ok=True)
 
-    return claim_ref
+        # --- Create subfolder for images
+        image_dir = os.path.join(claim_folder, "images")
+        os.makedirs(image_dir, exist_ok=True)
+
+        # --- Save uploaded images
+        image_paths = []
+        for idx, uploaded_file in enumerate(uploaded_images):
+            img_filename = f"image_{idx+1}_{uploaded_file.name}"
+            img_path = os.path.join(image_dir, img_filename)
+            with open(img_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            image_paths.append(img_path)
+
+        # --- Save claim metadata to JSON
+        metadata = {
+            "claim_ref": claim_ref,
+            "name": name,
+            "branch": branch,
+            "phone_number": str(phone_number),
+            "policy_number": policy_number,
+            "plate_number": plate_number,
+            "car_model": car_model,
+            "year_of_manufacture": str(year_of_manufacture),
+            "date_of_accident": str(date_of_accident),
+            "time_of_accident": str(time_of_accident),
+            "type_of_accident": type_of_accident,
+            "fatality": fatality,
+            "fatality_details": fatality_details,
+            "injuries": injuries,
+            "location": location,
+            "legal_authority_contacted": legal_authority_contacted,
+            "police_report_number": police_report_number,
+            "witnesses": witnesses,
+            "description_of_accident": description_of_accident,
+            "uploaded_images": image_paths,
+            "ai_response": ai_response,
+            "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+
+        metadata_path = os.path.join(claim_folder, "claim_data.json")
+        with open(metadata_path, "w") as f:
+            json.dump(metadata, f, indent=4)
+
+        # --- Save record to SQLite
+        conn = sqlite3.connect("claims.db")
+        cursor = conn.cursor()
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS claims (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            claim_ref TEXT,
+            name TEXT,
+            branch TEXT,
+            phone_number TEXT,
+            policy_number TEXT,
+            plate_number TEXT,
+            car_model TEXT,
+            year_of_manufacture TEXT,
+            date_of_accident TEXT,
+            time_of_accident TEXT,
+            type_of_accident TEXT,
+            fatality TEXT,
+            fatality_details TEXT,
+            injuries TEXT,
+            location TEXT,
+            legal_authority_contacted TEXT,
+            police_report_number TEXT,
+            witnesses TEXT,
+            description_of_accident TEXT,
+            json_path TEXT,
+            submitted_on TEXT
+        )
+        """)
+        conn.commit()
+
+        cursor.execute("""
+        INSERT INTO claims (
+            claim_ref, name, branch, phone_number, policy_number,
+            plate_number, car_model, year_of_manufacture, date_of_accident,
+            time_of_accident, type_of_accident, fatality, fatality_details,
+            injuries, location, legal_authority_contacted, police_report_number,
+            witnesses, description_of_accident, json_path, submitted_on
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            claim_ref, name, branch, str(phone_number), policy_number,
+            plate_number, car_model, str(year_of_manufacture),
+            str(date_of_accident), str(time_of_accident),
+            type_of_accident, fatality, fatality_details, injuries,
+            location, legal_authority_contacted, police_report_number,
+            witnesses, description_of_accident, metadata_path,
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        ))
+
+        conn.commit()
+        conn.close()
+
+        print(f"✅ Claim {claim_ref} saved successfully with {len(image_paths)} images.")
+        return {"status": "ok", "claim_ref": claim_ref, "image_paths": image_paths}
+
+    except Exception as e:
+        print(f"❌ Error saving claim: {str(e)}")
+        return {"status": "error", "message": str(e)}
+
+
 
 def generate_claim_pdf(claim_data, logo_path=None):
     """
-    Generate a PDF receipt for the submitted claim
-    claim_data: dict containing all claim info
-    logo_path: path to company logo
+    Generate a well-formatted PDF receipt for a submitted claim,
+    ensuring all content fits properly (no cut-off).
     """
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
 
-    # Title
-    pdf.set_font("Arial", "B", 16)
-    pdf.set_text_color(0, 51, 153)  # Awash blue
-    pdf.cell(0, 10, "Awash Insurance - Claim Receipt", ln=True, align="C")
+    # Title Section
+    pdf.set_font("Arial", "B", 18)
+    pdf.set_text_color(0, 51, 153)
+    pdf.cell(0, 12, "Awash Insurance - Claim Receipt", ln=True, align="C")
     pdf.ln(5)
 
-    # Logo
+    # Logo (top-right)
     if logo_path and os.path.exists(logo_path):
-        pdf.image(logo_path, x=10, y=10, w=33)
+        pdf.image(logo_path, x=160, y=10, w=33)
 
     # Motto
-    pdf.set_font("Arial", "I", 10)
-    pdf.set_text_color(255, 215, 0)  # Gold
+    pdf.set_font("Arial", "I", 11)
+    pdf.set_text_color(100, 100, 100)
     pdf.cell(0, 10, '"Your Safety, Our Commitment"', ln=True, align="C")
-    pdf.ln(10)
+    pdf.ln(8)
 
-    # Claim Info
-    pdf.set_font("Arial", "B", 12)
+    # Claim Info Section
+    pdf.set_font("Arial", "B", 13)
     pdf.set_text_color(0, 0, 0)
+    pdf.cell(0, 10, "Claim Information", ln=True)
+    pdf.ln(3)
+
+    # Table layout for claim fields
+    pdf.set_font("Arial", "", 12)
+    pdf.set_fill_color(245, 245, 245)
+
     fields = [
         ("Claim Reference", claim_data.get("claim_ref")),
         ("Full Name", claim_data.get("name")),
@@ -203,26 +292,47 @@ def generate_claim_pdf(claim_data, logo_path=None):
         ("Car Model", claim_data.get("car_model")),
         ("Branch", claim_data.get("branch")),
         ("Date of Accident", claim_data.get("date_of_accident")),
+        ("Time of Accident", claim_data.get("time_of_accident")),
         ("Location", claim_data.get("location")),
         ("Type of Accident", claim_data.get("type_of_accident")),
+        ("Fatality", claim_data.get("fatality")),
+        ("Injuries", claim_data.get("injuries")),
+        ("Witnesses", claim_data.get("witnesses")),
+        ("Description of Accident", claim_data.get("description_of_accident")),
         ("Submitted On", datetime.now().strftime("%Y-%m-%d %H:%M"))
     ]
 
-    pdf.set_fill_color(240, 240, 240)
+    # Proper wrapping for long text
     for label, value in fields:
-        pdf.cell(0, 10, f"{label}:", 0, 1, "L")
-        pdf.set_font("Arial", "", 12)
-        pdf.multi_cell(0, 10, str(value), 0, "L", fill=False)
+        value = str(value) if value else "N/A"
         pdf.set_font("Arial", "B", 12)
+        pdf.cell(60, 8, f"{label}:", border=0)
+        pdf.set_font("Arial", "", 12)
+        pdf.multi_cell(0, 8, value, border=0)
+        pdf.ln(1)
 
-    # Footer
-    pdf.ln(10)
-    pdf.set_font("Arial", "I", 10)
-    pdf.set_text_color(100, 100, 100)
-    pdf.cell(0, 10, "Thank you for choosing Awash Insurance.", align="C")
+    # Divider line
+    pdf.ln(5)
+    pdf.set_draw_color(0, 51, 153)
+    pdf.set_line_width(0.5)
+    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.ln(8)
 
-    # Save PDF
-    pdf_output = f"claims_pdfs/{claim_data['claim_ref']}.pdf"
-    os.makedirs("claims_pdfs", exist_ok=True)
+    # Footer message
+    pdf.set_font("Arial", "I", 11)
+    pdf.set_text_color(80, 80, 80)
+    pdf.multi_cell(0, 8, "Thank you for choosing Awash Insurance. Our dedicated claims team will contact you within 24 hours.")
+    pdf.ln(6)
+
+    pdf.set_font("Arial", "B", 10)
+    pdf.set_text_color(0, 51, 153)
+    pdf.cell(0, 8, "Awash Insurance S.C. | We Flow With You.", align="C")
+
+    # Safe file name
+    safe_claim_ref = claim_data["claim_ref"].replace("/", "_")
+    pdf_dir = "claims_pdfs"
+    os.makedirs(pdf_dir, exist_ok=True)
+    pdf_output = os.path.join(pdf_dir, f"{safe_claim_ref}.pdf")
     pdf.output(pdf_output)
+
     return pdf_output
